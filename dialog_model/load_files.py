@@ -20,25 +20,60 @@ class Lang:
             self.word2count[word] = 1
             self.index2word[self.n_words] = word
             self.n_words += 1
+
         else:
             self.word2count[word] += 1
 
-    def unicodeToAscii(s):
+    def unicodeToAscii(self,s):
         return ''.join(
             c for c in unicodedata.normalize('NFD', s)
             if unidodedata.category(s) != 'Mn'
+        )
 
-    def 
-            
- 
-   def readLangs(lang1,lang2,reverse=False):
-        print("Reading lines...")
+    def normalizeString(self,s):
+        return s.strip()
 
-        #Read the file and split into lines
-        lines = open("cleaning/%s-%s.txt" % (lang1,lang2), encoding='utf-8').read().strip().split('\n')
+MAX_LENGTH = 70
 
-        #Split every line into pairs and normalize
-        pairs = [[normalizeString(s) for s in l.split('\t')] for l in lines]
+def readLangs(lang1,lang2,reverse=False):
+    print("Reading lines...")
 
-        #Reverse pairs, make Lnaf instance
-        if reverse      
+    #Read the file and split into lines
+    lines = open("data/cleaning/%s-%s.txt" % (lang1,lang2), encoding='utf-8').read().strip().split('\n')
+
+    #Split every line into pairs and normalize
+    pairs = [[ s.strip() for s in l.split('\t')] for l in lines]
+
+    #Reverse pairs, make Lnaf instance
+    if reverse:
+        pairs = [list(reverse(p)) for p in pairs]
+        input_lang = Lang(lang2)
+        output_lang = Lang(lang1)
+    else:
+        input_lang = Lang(lang1)
+        output_lang = Lang(lang2)
+        
+    return input_lang, output_lang, pairs
+
+    
+def filterPair(p):
+    return len(p[0].split(' ')) < MAX_LENGTH and len(p[1].split(' ')) < MAX_LENGTH
+
+def filterPairs(pairs):
+    return [pair for pair in pairs if filterPair(pair)]
+
+def prepareData(lang1, lang2, reverse=False):
+    input_lang, output_lang, pairs = readLangs(lang1, lang2, reverse)
+    print("Read %s sentence pairs" % len(pairs))
+    pairs = filterPairs(pairs)
+    print("Trimmed to %s sentence pairs" % len(pairs))
+    print("Couonted words...")
+    for pair in pairs:
+        input_lang.addSentence(pair[0])
+        output_lang.addSentence(pair[1])
+    print("Counted words:")
+    print(input_lang.name, input_lang.n_words)
+    print(output_lang.name, output_lang.n_words)
+    return input_lang, output_lang, pair
+
+
