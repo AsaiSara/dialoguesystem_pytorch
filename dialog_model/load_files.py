@@ -115,11 +115,11 @@ class Emo(self, name):
 
 #Load Robot_Emotion 
 def LoadEmo(domain,lang3):
-    #lang3= robot or human
+    #lang3にはemotion の主を入れる( robot or human)
     emo = Emo(lang3)
     emotions = open('%s/%s_emotions.txt' % (domain,lang3), encoding='utf-8').
         read().strip()split('\n')
-    emo_id = [[emo.emo2index[e] for e in emotions]
+    emo_id = [[emo.emo2index[e]] for e in emotions]
     emo_tensor = torch.tensore(emo_id, dtype=torch.long, device=decice)
     print("Read %s %s-emotions" % len(emotions))
     return emo_tensor
