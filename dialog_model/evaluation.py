@@ -41,8 +41,12 @@ def evaluate(encoder, decoder, sentence, emo_id, max_length=MAX_LENGTH):
                     break
                 else:　#decodeしたoutputを単語に変換して、wordとして加える
                     decoded_words.append(output_lang.index2word[topi.item()])
-                    #decodeのinputとして
+                    #decodeのinputとしてtopiの次元削減した値を渡す
+                    #(.dataはVariableから基礎的なTensorを得るための主要な方法) 
+                    #(x.dataの任意の変更はautograd二より追跡されないので安全な代替x.detach()を使用する)
                     decoder_input = topi.squeeze().detach()
 
                 return decoded_words, decoder_attentions[:di + 1]
+
+
 
