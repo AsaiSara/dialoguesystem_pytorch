@@ -1,6 +1,7 @@
 SOS_token = 0
 EOS_token = 1
 UNK_token = 2
+MAX_LENGTH = 70
 
 class Lang:
     def __init__(self, name):
@@ -33,7 +34,6 @@ class Lang:
     def normalizeString(self,s):
         return s.strip()
 
-MAX_LENGTH = 70
 
 def readLangs(lang1,lang2,reverse=False):
     print("Reading lines...")
@@ -55,13 +55,35 @@ def readLangs(lang1,lang2,reverse=False):
         
     return input_lang, output_lang, pairs
 
-    
+#Filtering Data    
 def filterPair(p):
     return len(p[0].split(' ')) < MAX_LENGTH and len(p[1].split(' ')) < MAX_LENGTH
 
 def filterPairs(pairs):
     return [pair for pair in pairs if filterPair(pair)]
 
+#Prepairing Training Data
+def indexFromSentence(lang, sentence):
+    ids = []
+    for word in sentence.split(' '):
+        if word in lang.word2index:
+            ids.append(lang.word2index[word])
+        else :
+            ids.append(UNK_token)
+        return ids
+
+def tensorFromSentence(lang, sentence):
+    indexes = indexesFromSentence(lang, sentence)
+    indexes.append(EOS_token)
+    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1,1)
+
+def tensorsFromPair(pair):
+    input_tensor = tensorFromSetence(input_lang, pair[0])
+    target_tensor = tensorFromSentence(output_lang, pair[1])
+    return(input_tensor, target_tensor)
+
+
+#Load Data Corpus 
 def prepareData(lang1, lang2, reverse=False):
     input_lang, output_lang, pairs = readLangs(lang1, lang2, reverse)
     print("Read %s sentence pairs" % len(pairs))
@@ -76,4 +98,17 @@ def prepareData(lang1, lang2, reverse=False):
     print(output_lang.name, output_lang.n_words)
     return input_lang, output_lang, pair
 
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
