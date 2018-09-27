@@ -77,3 +77,16 @@ class AttenDecoderRNN(nn.Module):
         return torch.zeros(1,1,self.hidden_size,device=device)
 
 
+class PredictEmotion(nn.Module):
+    def __init__(self, hidden_size, output_size):
+        super(PredictEmotion, self).__init__()
+        self.li1 = nn.Linear(hidden_size, hidden_size)
+        self.li2 = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        h = self.li1(x)
+        h = F.tanh(h)
+        y = self.li2(h)
+        y = F.log_seftmax(y, dim=1)
+        return y
+
