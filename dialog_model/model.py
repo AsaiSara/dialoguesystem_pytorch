@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else"cpu")
 
@@ -72,6 +73,8 @@ class AttenDecoderRNN(nn.Module):
         ht_var = F.tanh(ht_var)
         ht_var = self.out(ht_var)
         output = F.log_softmax(ht_var, dim=2)
+        
+        return output, hidden, attan_weights
 
     def initHidden(self):
         return torch.zeros(1,1,self.hidden_size,device=device)
