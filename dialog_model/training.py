@@ -1,8 +1,13 @@
 import time
 import math
+
+from load_files import * 
+from model import *
+
+#teacher_forcingを使う割合、使わない場合はdecoder_outputの最も確率が高いidを次の入力にする
 teacher_forcing_ratio = 0.5
 
-
+#時間の出力のための関数
 def asMinutes(s):
     m = math.floor(s / 60)
     s -= m * 60
@@ -15,22 +20,31 @@ def timeSince(since,percent):
     rs = es -s
     return '%s (- %s)' %(asMinutes(s), asMinutes(rs))
 
-
+#Training 
 def train(input_tensor, target_tensor, emo_id, encoder, decoder, encoder_optimizer, decoder_optimizer, emotion_optimizer, criterion, max_length=MAX_LENGTH):
-    encoder_hidden = encoder.initHidden()
+    #input_tensor,target_tensore: 発話文と応答文をid化した配列のtensor(1文の単語配列)
+    #emo_id: emotion id の配列のtensor(発話対1ペアに対する感情ラベル)
+    #encoder: EncoderRNNのmodel, decoder: decoderRNNのmoddel 
+    #criterion: loss function
 
+    #encoder_hidden, optimizerを初期化
+    encoder_hidden = encoder.initHidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
     emotion_optimizer.zero_grad()
-
+    #input_tensor,target_tensorの長さを変数に入れる
     input_length = input_tensor.size(0)
     target_length = target_tensor.size(0)
-
+    #encoder_outputs を0行列のtensorにしておく
     encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+    #loss の初期化
     loss = 0
 
+    #inputのtensorを一つずつ(1単語ずつ)取り出してencodeする
+    #出力はattentionで使うのでencoder_outputsのtensorに入れていく
     for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(input_tensore[ei], encoder_hidden)
+        encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
+        #encoder_outputは3次元なので3次元の値のみ取り出して, encoder_outputsのtensor配列に入れる
         encoder_outputs[ei] = encoder_output[0,0]
 
     decoder_input = torch.tensor([[SOS_token]], device=device)
@@ -44,33 +58,36 @@ def train(input_tensor, target_tensor, emo_id, encoder, decoder, encoder_optimiz
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, emo_id, decoder_hidden, encoder_outputs)
             loss += criterion(decoder_output[0], target_tensor[di])
+            #decoderの入力に一つ前の正解データをそのまま次のdecoder_inputで使う(Teacher Forcing)
             decoder_input = target_tensor[di] #Teacher forcing
 
-        else:
-            #Without teacher forcing: use its own predictions as the next input
-            for di in range(target_length):
-                decoder_output decoder_hidden, decoder_attention = decoder(
-                    decoder_input, emo_id, decoder_hidden, encoder_outputs)
-                topv, topi = decoder_output.topk(1)
-                decoder_input = topi.squeeze().detach()  #detach from history as input
+    else:
+        #Without teacher forcing: use its own predictions as the next input
+        for di in range(target_length):
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, emo_id, decoder_hidden, encoder_outputs)
+            #最大値とその配列番号を渡す、softmaxで最大の値を次のdecoder_inputで使う
+            topv, topi = decoder_output.topk(1)
+            decoder_input = topi.squeeze().detach()  #detach from history as input
+            #損失関数に正解データとoutputの値とのNLLossを加える。
+            loss += criterion(decoder_output[0],target_tensor[di])
+            #decoder_inputの値がEOSのidであった場合ループを抜ける(target_lengthより前にEOSが出た場合)
+            if decoder_input.item() == EOS_token:
+                break
 
-                loss += criterion(decoder_output[0],target_tensor[di])
-                if decoder_input.item() == EOS_token:
-                    break
+    loss.backward()
 
-        loss.backward()
+    encoder_optimizer.step()
+    decoder_optimizer.step()
+    emotion_optimizer.step()
 
-        encoder_optimizer.step()
-        decoder_optimizer.step()
-        emotion_optimizer.step()
-
-        return loss.item() / target_length 
+    return loss.item() / target_length 
 
 
-#robo_emo_tensor追加
-def trainIters(encoder, decoder, robo_emo_tensor, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+#emo_tensor追加
+def trainIters(encoder, decoder, emo_tensor, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
     #encoder: EncoderRNN(input,hidden)クラス, decoder: AttenDecoderRNN(hidden,output)クラス
-    #######robo_emo_tensorでtensorのrobo_emoを渡して使いたいが、未完成
+    #n_iters: 学習させる回数(int)
+    #emo_tensor: emotionのidをtensor
     start = time.time()
     plot_losses = []
     print_loss_total = 0  #Reset every print_every
@@ -83,7 +100,7 @@ def trainIters(encoder, decoder, robo_emo_tensor, n_iters, print_every=1000, plo
     emotion_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
 
     #randomに学習データを選んでn_ters回数分の配列を作成、感情は分けて配列を作成 
-    training_sets = [random.choice(list(zip(pairs, robo_emo_tensor))) for i in range(n_iters)]
+    training_sets = [random.choice(list(zip(pairs, emo_tensor))) for i in range(n_iters)]
     training_pairs = [tensorsFromPair(pair) for pair, _ in training_sets]
     training_emotions = [emo for _, emo in training_sets]
     #######上のデータ処理をtrainの外でやりたい
@@ -102,7 +119,7 @@ def trainIters(encoder, decoder, robo_emo_tensor, n_iters, print_every=1000, plo
         print_loss_total += loss
         plot_loss_total += loss
 　　　　#print_every回数ごとに開始からの時間と、
-　　　　#トレイン回数と学習の終わった割合とprint_everyごとの平均ロスを出力
+　　　　#学習回数, 学習の終わった割合, print_everyごとのLossの平均を出力
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
@@ -129,4 +146,19 @@ def showPlot(points):
     loc = ticker.MultipleLocator(base=0.2)
     ax.yaxis.set_major_locator(loc)
     plt.plot(points)
+
+###Prepare Datas###
+input_lang, output_lang, pair = prepareData('hu','ro','cleaning')
+dev_pairs = pairs[1200:1350]
+test_pairs = pairs[1350:]
+pairs = pairs[:900]
+
+emo_tensor = LoadEmo('cleaning','robot')
+
+###Training###
+hidden_size = 256
+encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)
+attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
+trainIters(encoder1, attn_decoder1, emo_tensor, 100, print_every=10)
+
 
