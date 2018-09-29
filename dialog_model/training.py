@@ -3,6 +3,7 @@ import math
 
 from load_files import * 
 from model import *
+from torch import optim
 
 #teacher_forcingを使う割合、使わない場合はdecoder_outputの最も確率が高いidを次の入力にする
 teacher_forcing_ratio = 0.5
@@ -84,7 +85,7 @@ def train(input_tensor, target_tensor, emo_id, encoder, decoder, encoder_optimiz
 
 
 #emo_tensor追加
-def trainIters(encoder, decoder, emo_tensor, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+def trainIters(encoder, decoder, emo_tensor, n_iters, input_lang, output_lang, pairs, print_every=1000, plot_every=100, learning_rate=0.01):
     #encoder: EncoderRNN(input,hidden)クラス, decoder: AttenDecoderRNN(hidden,output)クラス
     #n_iters: 学習させる回数(int)
     #emo_tensor: emotionのidをtensor
@@ -101,25 +102,25 @@ def trainIters(encoder, decoder, emo_tensor, n_iters, print_every=1000, plot_eve
 
     #randomに学習データを選んでn_ters回数分の配列を作成、感情は分けて配列を作成 
     training_sets = [random.choice(list(zip(pairs, emo_tensor))) for i in range(n_iters)]
-    training_pairs = [tensorsFromPair(pair) for pair, _ in training_sets]
+    training_pairs = [tensor_FromPair(input_lang, output_lang, pair) for pair, _ in training_sets]
     training_emotions = [emo for _, emo in training_sets]
     #######上のデータ処理をtrainの外でやりたい
 
     #損失関数：NLLoss(CrossEntropyLossでsoftmaxを噛ませない損失関数)
-    criterion = nn.NLLoss()
+    criterion = nn.NLLLoss()
     #発話対をinputとtargetに分けて変数に入れて、train関数に入れて損失関数を出す
     for iter in range(1, n_iters + 1):
         training_pair = training_pairs[iter -1]
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
         emo_id = training_emotions[iter - 1]
-　　　　#損失関数をtrain関数で算出する
+        #損失関数をtrain関数で算出する
         loss = train(input_tensor, target_tensor, emo_id, encoder, decoder, encoder_optimizer, decoder_optimizer, emotion_optimizer, criterion)
 
         print_loss_total += loss
         plot_loss_total += loss
-　　　　#print_every回数ごとに開始からの時間と、
-　　　　#学習回数, 学習の終わった割合, print_everyごとのLossの平均を出力
+        #print_every回数ごとに開始からの時間と、
+        #学習回数, 学習の終わった割合, print_everyごとのLossの平均を出力
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
@@ -148,17 +149,13 @@ def showPlot(points):
     plt.plot(points)
 
 ###Prepare Datas###
-input_lang, output_lang, pair = prepareData('hu','ro','cleaning')
-dev_pairs = pairs[1200:1350]
-test_pairs = pairs[1350:]
-pairs = pairs[:900]
-
-emo_tensor = LoadEmo('cleaning','robot')
+from prepare_data import SetData
+input_lang, output_lang, train_pairs, dev_pairs, test_pairs, emo_tensor = SetData('hu','ro','cleaning','robot',200,1000)
 
 ###Training###
 hidden_size = 256
 encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)
 attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
-trainIters(encoder1, attn_decoder1, emo_tensor, 100, print_every=10)
+trainIters(encoder1, attn_decoder1, emo_tensor, 100, input_lang, output_lang, train_pairs, print_every=10)
 
 

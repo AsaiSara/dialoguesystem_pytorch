@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else"cpu")
+MAX_LENGTH = 70
 
 #Encoder model
 class EncoderRNN(nn.Module):
@@ -41,7 +42,7 @@ class DecoderRNN(nn.Module):
     def initHidden(self):
         return torch.zeros(1,1,self.hidden_size, device=device)
 
-class AttenDecoderRNN(nn.Module):
+class AttnDecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):
         super(AttnDecoderRNN, self).__init__()
         self.hidden_size = hidden_size
@@ -52,7 +53,7 @@ class AttenDecoderRNN(nn.Module):
         self.embedding = nn.Embedding(self.output_size, self.hidden_size)
         self.emotion_embedding = nn.Embedding(5,5)
         self.attn = nn.Linear(self.hidden_size * 2 + 5, self.max_length)
-        self.attn_combine = nn.Linear(self.hiddensize * 2, self.hidden_size)
+        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
         self.dropout = nn.Dropout(self.dropout_p)
         self.gru = nn.GRU(self.hidden_size + 5, self.hidden_size)
         self.out = nn.Linear(self.hidden_size, self.output_size)
@@ -69,12 +70,15 @@ class AttenDecoderRNN(nn.Module):
         score = torch.bmm(encoder_outputs.unsqueeze(0), torch.transpose(ht,1,2))
         attn_weights = F.softmax(score, dim=1)
         ct = torch.bmm(torch.transpose(attn_weights, 1,2),encoder_outputs.unsqueeze(0))
+
         ht_var = torch.cat((ct, ht),dim=2)
+        
+        ht_var = self.l1(ht_var)
         ht_var = F.tanh(ht_var)
         ht_var = self.out(ht_var)
         output = F.log_softmax(ht_var, dim=2)
         
-        return output, hidden, attan_weights
+        return output, hidden, attn_weights
 
     def initHidden(self):
         return torch.zeros(1,1,self.hidden_size,device=device)

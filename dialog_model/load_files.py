@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import random
 
 SOS_token = 0
 EOS_token = 1
@@ -82,11 +83,11 @@ def tensor_indexFromSentence(lang, sentence):
             ids.append(UNK_token)
     #文の最後に<EOS>のidを追加
     ids.append(EOS_token)
-    return torch.tensor(ids, dtype=torch.long, device=device.view(-1,1))
+    return torch.tensor(ids, dtype=torch.long, device=device)
 
 #発話対を配列にした配列を受け取って、id化したtensorの配列を返す
-def tensorsFromPair(pair):
-    input_tensor = tensor_indexFromSetence(input_lang, pair[0])
+def tensor_FromPair(input_lang, output_lang, pair):
+    input_tensor = tensor_indexFromSentence(input_lang, pair[0])
     target_tensor = tensor_indexFromSentence(output_lang, pair[1])
     return(input_tensor, target_tensor)
 
@@ -123,7 +124,7 @@ index2emo = {"平静","怒り","悲しみ","喜び","安心"}
 
 #Load Robot_Emotion 
 def LoadEmo(domain,lang3):
-    #lang3にはemotion の主を入れる(robot or human)
+    #lang3にはemotion の主を入れる( robot or human)
     emotions = open('data/%s/%s_emotions.txt' % (domain,lang3), encoding='utf-8').read().strip().split('\n')
     emo_id = [[emo2index[e]] for e in emotions]
     emo_tensor = torch.tensor(emo_id, dtype=torch.long, device=device)
