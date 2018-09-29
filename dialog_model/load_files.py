@@ -123,7 +123,7 @@ index2emo = {"平静","怒り","悲しみ","喜び","安心"}
 
 #Load Robot_Emotion 
 def LoadEmo(domain,lang3):
-    #lang3にはemotion の主を入れる( robot or human)
+    #lang3にはemotion の主を入れる(robot or human)
     emotions = open('data/%s/%s_emotions.txt' % (domain,lang3), encoding='utf-8').read().strip().split('\n')
     emo_id = [[emo2index[e]] for e in emotions]
     emo_tensor = torch.tensor(emo_id, dtype=torch.long, device=device)
