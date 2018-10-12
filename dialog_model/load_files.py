@@ -83,7 +83,7 @@ def tensor_indexFromSentence(lang, sentence):
             ids.append(UNK_token)
     #文の最後に<EOS>のidを追加
     ids.append(EOS_token)
-    return torch.tensor(ids, dtype=torch.long, device=device)
+    return torch.tensor(ids, dtype=torch.long, device=device).view(-1,1)
 
 #発話対を配列にした配列を受け取って、id化したtensorの配列を返す
 def tensor_FromPair(input_lang, output_lang, pair):
@@ -127,7 +127,20 @@ def LoadEmo(domain,lang3):
     #lang3にはemotion の主を入れる( robot or human)
     emotions = open('data/%s/%s_emotions.txt' % (domain,lang3), encoding='utf-8').read().strip().split('\n')
     emo_id = [[emo2index[e]] for e in emotions]
-    emo_tensor = torch.tensor(emo_id, dtype=torch.long, device=device)
+    #emo_tensor = torch.tensor(emo_id, dtype=torch.long, device=device)
     print("Read %s %s-emotions" % (len(emotions),lang3))
-    return emo_tensor
+    return emo_id
+
+#training用のデータ準備
+#randomに学習データのペアと感情を選んでn_iter回数文の配列を作成
+def training_set_emo(input_lang, output_lang, pairs, emo_id, n_iters):
+    training_sets = [random.choice(list(zip(pairs, emo_id))) for i in range(n_iters)]
+    training_pairs = [tensor_FromPair(input_lang, output_lang, pair) for pair, _ in training_sets]
+    print(training_pairs[0][1].size())
+    print(training_pairs[0][1].size())
+    training_emotions = [torch.tensor(emo,dtype=torch.long,device=device) for _, emo in training_sets]
+    return training_pairs, training_emotions
+
+
+
 
