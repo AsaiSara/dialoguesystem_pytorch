@@ -15,8 +15,8 @@ class Lang:
         self.name = name
         self.word2index = {}
         self.word2count = {}
-        self.index2word = {0:"SOS", 1:"EOS", 2:"UNK"}
-        self.n_words = 3
+        self.index2word = {0:"PAD", 1:"SOS", 2:"EOS", 3:"UNK"}
+        self.n_words = 4
 
     def addSentence(self, sentence): #文を空白で区切って一つずつ単語を辞書にしていく
         for word in sentence.split(' '):
@@ -72,7 +72,7 @@ def filterPairs(pairs):#FilterPairの条件を満たしている発話対のみ�
     return [pair for pair in pairs if filterPair(pair)]
 
 #Prepairing Training Data
-def tensor_indexFromSentence(lang, sentence):
+def indexFromSentence(lang, sentence):
     #langは参照するLangクラス,sentenceはid化したい文(形態素解析済み, 単語間は空白区切り),
     #sentenceをid化した配列のtensor(size[len(words),1])を返す
     ids = []
@@ -83,7 +83,14 @@ def tensor_indexFromSentence(lang, sentence):
             ids.append(UNK_token)
     #文の最後に<EOS>のidを追加
     ids.append(EOS_token)
-    return torch.tensor(ids, dtype=torch.long, device=device).view(-1,1)
+    length = len(ids)
+    ids += [0]*(MAX_LENGTH-len(ids))
+    return ids, length
+
+def tensor_indexFromSentence(lang,sentence):
+    ids,_ = indexFromSentence(lang,sentence)
+    return torch.tensor(ids,dtype=torch.long, device=device).view(-1,1) 
+
 
 #発話対を配列にした配列を受け取って、id化したtensorの配列を返す
 def tensor_FromPair(input_lang, output_lang, pair):
@@ -133,13 +140,56 @@ def LoadEmo(domain,lang3):
 
 #training用のデータ準備
 #randomに学習データのペアと感情を選んでn_iter回数文の配列を作成
+#mini-batch処理を追加
+
 def training_set_emo(input_lang, output_lang, pairs, emo_id, n_iters):
     training_sets = [random.choice(list(zip(pairs, emo_id))) for i in range(n_iters)]
     training_pairs = [tensor_FromPair(input_lang, output_lang, pair) for pair, _ in training_sets]
-    print(training_pairs[0][1].size())
-    print(training_pairs[0][1].size())
     training_emotions = [torch.tensor(emo,dtype=torch.long,device=device) for _, emo in training_sets]
     return training_pairs, training_emotions
+
+batch_size = 30
+def generate_batch(input_lang, output_lang, pairs, batch_size, shuffle=True):
+    random.shuffle(pairs)
+    
+    for i in range(len(pairs)//batch_size):
+        batch_pairs = pairs[batch_size* i:batch_size * (i+1)]
+
+        input_batch = []
+        target_batch = []
+        input_lens = []
+        target_lens = []
+        for input_seq, target_seq in batch_pairs:
+            #文中の単語のidの配列を受け取る
+            input_seq, input_len = indexFromPair(input_lang,input_seq)
+            target_seq, target_len = indexFromPair(output_lang,output_seq)
+            #id配列をbatch用配列に追加、単語数も長さの配列に追加
+            input_batch.append(input_seq)
+            target_batch.append(target_seq)
+            input_lens.append(input_len)
+            target_lens.append(target_len)
+        #配列をtensorにする
+        input_batch = torch.tensor(input_batch, dtype=torch.long, device=device)
+        target_batch = torch.tensor(target_batch, dtype=torch.long, device=device)
+        input_lens = torch.tensor(input_lens)
+        target_lens = torch.tensor(target_lens)
+
+        # sort 
+        #inputの単語数を大きいものからsortした配列と、そのidを記録
+        input_lens, sorted_idxs = input_lens.sort(0, descending=True)
+        #単語数の多い文から文の順をsortし、転置する(まとまりを文ごから単語の出現順に変える)
+        input_batch = input_batch[sorted_idxs].transpose(0,1)
+        #すべてPADDINGになっている要素を省く
+        input_batch = input_batch[:input_lens.max().item()]
+
+        #input_batchと順番をそろえて、同様に転置する
+        target_batch = target_batch[sorted_idx].transpose(0,1)
+        target_batch = target_batch[:target_lens.max().item()]
+        target_lens = target_lens[sorted_idxs]
+
+        yield input_batch, input_lens, target_batch, target_lens
+            
+
 
 
 
